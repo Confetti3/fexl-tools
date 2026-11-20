@@ -1,0 +1,7 @@
+build/
+*.obj
+*.dll
+*.lib
+*.pdb
+fexl_trainer.ini
+fexl_trainer.log
