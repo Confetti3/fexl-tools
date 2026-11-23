@@ -29,6 +29,7 @@ struct Range {
 inline constexpr Range FillOpacityRange{0.1f, 0.8f, 0.05f};
 inline constexpr Range OutlineWidthRange{0.5f, 4.0f, 0.1f};
 inline constexpr Range MeterSizeRange{60.0f, 160.0f, 5.0f};  // percent
+inline constexpr Range MeterOpacityRange{20.0f, 100.0f, 5.0f};  // percent
 
 struct MeterSettings {
   bool shown = true;
@@ -36,7 +37,8 @@ struct MeterSettings {
   bool readings = true;
   bool key = true;
   bool atTop = false;
-  float size = 100.0f;  // percent of the standard size
+  float size = 100.0f;     // percent of the standard size
+  float opacity = 100.0f;  // percent: the whole panel, its cells and text with it
 
   template <class V>
   void Visit(V& v) {
@@ -46,6 +48,7 @@ struct MeterSettings {
     v("meterKey", key);
     v("meterAtTop", atTop);
     v("meterSize", size, MeterSizeRange);
+    v("meterOpacity", opacity, MeterOpacityRange);
   }
   bool operator==(const MeterSettings&) const = default;
 };

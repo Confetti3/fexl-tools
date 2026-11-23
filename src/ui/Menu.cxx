@@ -67,6 +67,8 @@ void MeterTab(ListMenu& m, MeterSettings& s, bool& controlsLine) {
   m.Toggle("Controls line", "The trainer's keys, at the top right of the meter.", controlsLine);
   m.Slider("Meter size", "How large the frame meter is drawn; 100% is the standard size.", s.size, MeterSizeRange, "%.0f%%",
            s.shown);
+  m.Slider("Meter opacity", "How solid the frame meter is drawn; lower lets the fight show through it.", s.opacity,
+           MeterOpacityRange, "%.0f%%", s.shown);
   m.Toggle("At the top of the screen", "Under the life bars instead of above the Gougi icons.", s.atTop, s.shown);
   m.Section("READING THE METER");
   m.Text("Each cell is one frame (1/60 s). A bar starts when either fighter commits and ends when both are free again. "
@@ -105,7 +107,7 @@ void AboutTab(ListMenu& m, Language& language) {
   m.Choice("Language", JapaneseFontLoaded() ? "The trainer's language. Auto follows Windows' display language."
                                             : "Japanese needs a Japanese font (Yu Gothic, Meiryo or MS Gothic), which was not found.",
            language);
-  m.Section("FEXL TRAINING TOOLS 0.6");
+  m.Section("FEXL TRAINING TOOLS 0.7");
   m.Text("For FIGHTING EX LAYER on Steam, version 1.5.7. Works in Training mode only: nothing shows, and nothing changes, "
          "in online or other matches. In Training it draws over the fight, and holds or slows it only when you ask.");
   m.Section("PAD, WHILE THIS MENU IS OPEN");

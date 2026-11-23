@@ -25,6 +25,9 @@ constexpr uintptr_t CameraEye = 0x2EF1640 + 0x190;  // the battle camera's eye (
 // Functions.
 constexpr uintptr_t HitCheck = 0x1F6950;       // once per battle tick, after the players update
 constexpr uintptr_t BattleTick = 0x1F1C80;     // a battle's tick (this, delta time); other modes run it too
+// The throw (catch) test, sub_1401E4F60(player, x, y, range, catch type): a throw calls it on its
+// active frame (measured: a ground throw once, on its third frame), after that frame's hit check.
+constexpr uintptr_t CatchTest = 0x1E4F60;
 constexpr uintptr_t XInputGetState = 0x43DDCC;  // the game's XInputGetState thunk, every reader's
 // Unreal Engine.
 constexpr uintptr_t GWorld = 0x2D99BC8;        // UWorld*
@@ -37,6 +40,7 @@ constexpr uintptr_t MarkRenderStateDirty = 0x73C0E0;  // UActorComponent::MarkRe
 // The first bytes of each hooked function, checked before hooking it.
 constexpr uint8_t HitCheckPrologue[5] = {0x40, 0x53, 0x57, 0x41, 0x54};
 constexpr uint8_t BattleTickPrologue[5] = {0x48, 0x89, 0x5C, 0x24, 0x08};
+constexpr uint8_t CatchTestPrologue[5] = {0x48, 0x8B, 0xC4, 0x48, 0x89};
 constexpr uint8_t XInputGetStatePrologue[5] = {0xFF, 0x25, 0x56, 0x93, 0x9A};  // jmp [import]
 
 // Battle kinds (sub_1401DB380): 2 is Training, measured. The trainer works in Training only,

@@ -12,6 +12,7 @@
 
 #include <windows.h>
 
+#include <array>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -28,7 +29,10 @@ constexpr uint64_t OnScreenForMs = 250;
 struct Session {
   game::BattleIdentity identity;
   uint32_t number = 0;                         // TrainerView::battle
-  std::optional<game::BattleFrame> previous;  // the last frame read, absent until the first
+  // The frame the running tick's hit check read; the meter follows it once the tick has run.
+  std::optional<game::BattleFrame> running;
+  std::optional<game::BattleFrame> previous;  // the last frame followed, absent until the first
+  std::array<training::MeterCell, 2> previousCells{};  // the cells that frame gave
   training::FrameMeter meter;
   bool meterChanged = true;  // since the last snapshot
   Playback playback;
@@ -78,6 +82,7 @@ void Publish(const PlaybackSettings& settings) {
 // command meant for it is carried out.
 void Switch(std::optional<Session> next) {
   scene::ClearHitboxes();
+  game::ForgetThrowTests();
   s_session = std::move(next);
   AcquireSRWLockExclusive(&s_mailLock);
   s_mail.clear();
@@ -85,8 +90,8 @@ void Switch(std::optional<Session> next) {
   Publish(CurrentSettings().playback);
 }
 
-// The one Training check, first in both hooks. Every battle mode runs both hooked functions;
-// outside Training the session ends and the hook does nothing more. Ending it takes the
+// The one Training check, first in the battle tick and the hit check. Every battle mode runs both
+// hooked functions; outside Training the session ends and the hook does nothing more. Ending it takes the
 // trainer's own spheres back out of the scene (scene::ClearHitboxes) and writes nothing else.
 bool TrainingGate() {
   if (game::InTraining()) return true;
@@ -117,8 +122,9 @@ void Follow(Session& session, const game::BattleFrame& frame) {
     const game::Fighter& before = session.previous ? session.previous->fighters[side] : now;
     if (DebugLog() && before.act != now.act)
       Log("P%d act %d -> %d at motion frame %u", side + 1, before.act, now.act, now.motionFrame);
-    cells[side] = game::MeterSample(now, before);
+    cells[side] = game::MeterSample(now, before, session.previousCells[side]);
   }
+  session.previousCells = cells;
   const bool wasOpen = session.meter.Open();
   session.meterChanged = session.meter.Push(cells) || session.meterChanged;
   // With FEXL_DEBUG=1, one line per finished exchange, for field reports and the test rig.
@@ -127,7 +133,8 @@ void Follow(Session& session, const game::BattleFrame& frame) {
 }
 
 // The battle tick, every battle mode's. In Training, playback decides whether this game frame
-// runs the battle; a held frame still redraws its spheres, as the settings are now.
+// runs the battle; a frame that ran is followed once it is complete (the game tests throws after
+// the hit check reads the frame). A held frame still redraws its spheres, as the settings are now.
 using BattleTickFn = void(__fastcall*)(void*, float);
 BattleTickFn o_battleTick;
 
@@ -148,34 +155,59 @@ void __fastcall BattleTick(void* battle, float delta) {
   session.identity = identity;
   ReadMail(session);
   const Settings settings = CurrentSettings();
-  if (session.playback.RunsThisFrame(settings.playback)) o_battleTick(battle, delta);  // the hit check reads the frame
-  else if (session.previous) scene::DrawHitboxes(*session.previous, settings.hitboxes);
+  if (session.playback.RunsThisFrame(settings.playback)) {
+    o_battleTick(battle, delta);  // the hit check reads the frame
+    // The gate in the hit check may have ended the session meanwhile.
+    if (s_session && s_session->running) {
+      game::ReadThrowTests(*s_session->running);
+      Follow(*s_session, *s_session->running);
+      s_session->running.reset();
+    }
+  } else if (session.previous) {
+    scene::DrawHitboxes(*session.previous, settings.hitboxes);
+  }
   if (s_session) Publish(settings.playback);
 }
 
 // The hit check, every battle mode's, once per battle frame that runs: the frame is read before
-// the game tests it. A frame that does not read (a fighter between two of its objects) is skipped.
+// the game tests it, for the battle tick to follow. A frame that does not read (a fighter between
+// two of its objects) is skipped.
 using HitCheckFn = uint64_t(__fastcall*)(void*, void*);
 HitCheckFn o_hitCheck;
 
 uint64_t __fastcall HitCheck(void* a, void* b) {
   game::BattleFrame frame;
   if (TrainingGate() && s_session && game::ReadBattleFrame(frame)) {
-    Follow(*s_session, frame);
+    // One hit check per tick is all that has been seen; should a tick run two, none is lost.
+    if (s_session->running) Follow(*s_session, *s_session->running);
+    s_session->running = frame;
     scene::DrawHitboxes(frame, CurrentSettings().hitboxes);
   }
   return o_hitCheck(a, b);
 }
 
+// The throw (catch) test, called from a throw's script on its active frame, and from elsewhere in
+// the game (the CPU's choices among them). In Training it notes whose throw was tested, for the
+// battle tick to read once the frame has run; it changes nothing, in any mode.
+using CatchTestFn = uint64_t(__fastcall*)(void*, float, float, float, int);
+CatchTestFn o_catchTest;
+
+uint64_t __fastcall CatchTest(void* player, float x, float y, float range, int type) {
+  if (game::InTraining()) game::NoteCatchTest(player);
+  return o_catchTest(player, x, y, range, type);
+}
+
 }  // namespace
 
 bool InstallTrainer() {
-  // Both or neither: a tick hook without the hit check would hold Training frames for a trainer
-  // that shows nothing.
+  // All or none: a tick hook without the hit check would hold Training frames for a trainer
+  // that shows nothing, and without the catch test throws would show no active frames.
   if (game::HookGameFunction("hit check", game::rva::HitCheck, game::HitCheckPrologue, reinterpret_cast<void*>(&HitCheck),
                              reinterpret_cast<void**>(&o_hitCheck)) &&
       game::HookGameFunction("battle tick", game::rva::BattleTick, game::BattleTickPrologue,
-                             reinterpret_cast<void*>(&BattleTick), reinterpret_cast<void**>(&o_battleTick)))
+                             reinterpret_cast<void*>(&BattleTick), reinterpret_cast<void**>(&o_battleTick)) &&
+      game::HookGameFunction("catch test", game::rva::CatchTest, game::CatchTestPrologue, reinterpret_cast<void*>(&CatchTest),
+                             reinterpret_cast<void**>(&o_catchTest)))
     return true;
   UnhookAll();
   return false;

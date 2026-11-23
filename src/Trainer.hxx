@@ -3,9 +3,10 @@
 // The trainer's game-thread side. One session per Training battle, owned by the game thread
 // alone: its two hooks (the battle tick, where a battle begins and ends and playback holds
 // frames back, and the hit check, where each frame is read) both pass the one Training gate
-// first, then feed the session's frame meter, draw its spheres and run its playback. The
-// overlay sees a snapshot published in one piece, and sends its commands through a mailbox
-// that the battle tick empties.
+// first, then feed the session's frame meter, draw its spheres and run its playback. A third
+// hook, on the game's throw test, touches no session: in Training it notes (game::NoteCatchTest)
+// whose throw was tested, which the battle tick reads once the frame has run. The overlay sees a snapshot published in one piece, and sends its
+// commands through a mailbox that the battle tick empties.
 
 #include "training/FrameMeter.hxx"
 
@@ -14,7 +15,7 @@
 
 namespace fexl {
 
-// Both hooks, or neither (false).
+// Every hook, or none (false).
 bool InstallTrainer();
 
 // What the overlay draws, as of the game thread's last frame. Any thread.

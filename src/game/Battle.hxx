@@ -32,11 +32,17 @@ struct SphereList {
 };
 
 // Player actions (player +0x2A8), named from Training. There are no names in the game.
+// A jump: take-off (2 frames), airborne, landing, for each of the three directions; an air attack
+// (ActNormal in the air) lands in ActLandForward whichever way the jump went. The landing's
+// motion goes on in ActRecovery.
+// A throw: 23 the attempt (its active frames are the catch tests), on a catch 24 the hold (the
+// window to break it) and 25 the throw itself, while the one caught is in 26.
 enum Act : int {
   ActStand = 0, ActCrouch = 1, ActCrouching = 2, ActRising = 3, ActWalkForward = 4, ActWalkBack = 5,
-  ActAirAttackLanding = 8, ActJumpStart = 12, ActAirborne = 13, ActLanding = 14, ActRecovery = 17,
-  ActNormal = 18, ActSpecial = 19, ActGuardPose = 20, ActBlockStun = 21, ActKnockedDown = 27, ActDown = 28,
-  ActHitStun = 29,
+  ActTakeOffForward = 6, ActAirForward = 7, ActLandForward = 8, ActTakeOffBack = 9, ActAirBack = 10, ActLandBack = 11,
+  ActTakeOff = 12, ActAir = 13, ActLand = 14, ActTurn = 16, ActRecovery = 17, ActNormal = 18, ActSpecial = 19,
+  ActGuardPose = 20, ActBlockStun = 21, ActThrow = 23, ActThrowHold = 24, ActThrowing = 25, ActThrown = 26,
+  ActKnockedDown = 27, ActDown = 28, ActHitStun = 29,
 };
 
 // The hit an action is playing: its window in motion frames, whether the game tests it on this
@@ -51,12 +57,16 @@ struct Attack {
 struct Fighter {
   int act = ActStand;
   uint32_t motionFrame = 0;     // the action's frame; it holds still in hit-freeze
+  bool airborne = false;        // off the ground (not on a jump's take-off or landing frames)
+  bool hitFreeze = false;       // held by contact (it can still move a frame now and then)
   std::optional<Attack> attack;  // absent when the action has no hit left
+  bool catchTested = false;     // the game tested this fighter's throw on this frame (ReadThrowTests)
   // Frames left during which strikes, or throws, cannot touch this fighter.
   int16_t strikeProof = 0, throwProof = 0;
 };
 
 struct BattleFrame {
+  uint64_t number = 0;  // the battle's frame count
   std::array<Fighter, 2> fighters{};
   std::array<SphereList<24>, 2> strikeHurt{};  // hit object layer 1: what strikes can hit
   std::array<SphereList<24>, 2> throwHurt{};   // layer 2: what throws can catch
@@ -70,6 +80,14 @@ bool InTraining();
 
 // False when the fighters are not there. The caller has checked InTraining.
 bool ReadBattleFrame(BattleFrame& frame);
+
+// The game is testing `player`'s throw (the catch test's hook, in Training). Any thread.
+void NoteCatchTest(const void* player);
+// Once `frame` has run: whose throw the game tested on it. The game tests throws after the hit
+// check that reads the frame, so this comes at the end of the battle tick.
+void ReadThrowTests(BattleFrame& frame);
+// A new battle: tests noted in the last one count for nothing (its frame count starts again).
+void ForgetThrowTests();
 
 // Which battle runs: its object, its fighters' objects and its frame count. A different object
 // or fighter, or a count that went back, is a new battle (a reload, a character change).

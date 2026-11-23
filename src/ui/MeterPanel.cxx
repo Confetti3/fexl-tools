@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <cstdio>
+#include <span>
 #include <string>
 
 namespace fexl::ui {
@@ -25,12 +26,14 @@ const MeterKeyEntry kKey[] = {
     {MeterKind::Active, "Active", "The move can hit on these frames."},
     {MeterKind::Recovery, "Recovery", "After the hit window; the fighter cannot act yet."},
     {MeterKind::Stop, "Hit-freeze", "Both fighters freeze on contact; not counted, shown as a pink line."},
-    {MeterKind::Hit, "Hitstun", "Being hit; cannot act."},
+    {MeterKind::Hit, "Hitstun", "Being hit or thrown; cannot act."},
     {MeterKind::Guard, "Blockstun", "Blocking; cannot act."},
     {MeterKind::Proximity, "Guard pose", "Ready to block as an attack comes; free to act."},
     {MeterKind::Movement, "Movement", "Walking or dashing."},
+    {MeterKind::Jump, "Jump", "A jump with no attack: take-off, the air and the landing frame."},
     {MeterKind::Down, "Knockdown", "Knocked down or getting up."},
-    {MeterKind::Unknown, "Other", "Throws and states not identified yet."},
+    {MeterKind::Throw, "Throw", "A throw that caught: holding and throwing the opponent."},
+    {MeterKind::Unknown, "Other", "States not identified yet."},
 };
 
 const InvincibilityKeyEntry kMarks[] = {
@@ -44,6 +47,7 @@ ImU32 KindColour(MeterKind kind) {
   switch (kind) {
     case MeterKind::Neutral: return IM_COL32(120, 126, 134, 150);
     case MeterKind::Movement: return IM_COL32(86, 196, 226, 235);
+    case MeterKind::Jump: return IM_COL32(168, 226, 246, 235);
     case MeterKind::Startup: return IM_COL32(52, 200, 96, 245);
     case MeterKind::Active: return IM_COL32(230, 52, 74, 245);
     case MeterKind::Recovery: return IM_COL32(52, 112, 230, 245);
@@ -52,6 +56,7 @@ ImU32 KindColour(MeterKind kind) {
     case MeterKind::Guard: return IM_COL32(242, 140, 40, 245);
     case MeterKind::Hit: return IM_COL32(242, 204, 60, 245);
     case MeterKind::Down: return IM_COL32(160, 104, 220, 245);
+    case MeterKind::Throw: return IM_COL32(32, 178, 152, 245);
     default: return IM_COL32(210, 200, 168, 245);
   }
 }
@@ -110,24 +115,46 @@ void Readings(ImDrawList* draw, const Layout& l, ImVec2 at, const MeterView& met
     draw->AddText(font, l.text, ImVec2(x, at.y), c, text.c_str());
     x += TextWidth(LoadedFonts().body, l.text, text.c_str()) + after;
   };
+  const float space = 6 * l.scale, apart = 16 * l.scale;
   const int side = meter.readingSide;
   if (side < 0) {
-    put(T("Frame data shows once a move is active"), colour::Muted, 0);
+    // No move yet: a jump's frames, else how to get a reading.
+    const int jumper = meter.jumps[0].seen ? 0 : meter.jumps[1].seen ? 1 : -1;
+    if (jumper < 0) {
+      put(T("Frame data shows once a move is active"), colour::Muted, 0);
+      return;
+    }
+    const training::JumpReading& jump = meter.jumps[jumper];
+    if (jumper == 1) put(T("P2"), colour::Gold, apart);
+    put(T("Jump"), colour::Text, apart);
+    put(T("Take-off"), colour::Muted, space);
+    put(std::to_string(jump.takeOff), colour::Text, apart);
+    put(T("Airborne"), colour::Muted, space);
+    put(std::to_string(jump.air), colour::Text, apart);
+    put(T("Landing"), colour::Muted, space);
+    put(jump.ended ? std::to_string(jump.landing) : "--", colour::Text, apart);
+    if (jump.ended) {
+      put(T("Total"), colour::Muted, space);
+      put(std::to_string(jump.Total()), colour::Text, 0);
+    }
     return;
   }
   const training::MoveReading& move = meter.moves[side];
-  const float space = 6 * l.scale, apart = 16 * l.scale;
   if (side == 1) put(T("P2"), colour::Gold, apart);
   put(T("Startup"), colour::Muted, space);
   put(std::to_string(move.startup), colour::Text, apart);
   put(T("Active"), colour::Muted, space);
   put(move.hits > 1 ? std::to_string(move.active) + " (" + std::to_string(move.hits) + " " + T("hits") + ")" : std::to_string(move.active),
       colour::Text, apart);
-  put(T("Recovery"), colour::Muted, space);
-  put(move.ended ? std::to_string(move.recovery) : "--", colour::Text, apart);
-  if (move.ended) {
-    put(T("Total"), colour::Muted, space);
-    put(std::to_string(move.Total()), colour::Text, apart);
+  if (move.caught) {
+    put(T("Throw connected"), colour::Text, apart);
+  } else {
+    put(T("Recovery"), colour::Muted, space);
+    put(move.ended ? std::to_string(move.recovery) : "--", colour::Text, apart);
+    if (move.ended) {
+      put(T("Total"), colour::Muted, space);
+      put(std::to_string(move.Total()), colour::Text, apart);
+    }
   }
   const training::Advantage& a = meter.advantage.valid ? meter.advantage : meter.lastAdvantage;
   if (!a.valid) {
@@ -140,14 +167,15 @@ void Readings(ImDrawList* draw, const Layout& l, ImVec2 at, const MeterView& met
   put(Signed(a.frames) + (a.knockdown ? std::string("  ") + T("knockdown") : std::string()), result, 0);
 }
 
-// The frames the bars show, oldest first: every frame but hit-freeze, which is left out (as
-// Ember leaves it) so the cells add up to the frame data. The frame after one is marked.
+// The frames the bars show, oldest first: the exchange's latest History frames but hit-freeze,
+// which is left out (as Ember leaves it) so the cells add up to the frame data. The frame after
+// one is marked.
 struct Shown {
   std::size_t index;
   bool afterFreeze;
 };
 
-const std::vector<Shown>& ShownFrames(const MeterView& meter) {
+std::span<const Shown> ShownFrames(const MeterView& meter) {
   static std::vector<Shown> shown;  // kept, so drawing does not allocate
   shown.clear();
   bool frozen = false;
@@ -160,12 +188,13 @@ const std::vector<Shown>& ShownFrames(const MeterView& meter) {
     shown.push_back({i, frozen});
     frozen = false;
   }
-  return shown;
+  const std::size_t from = shown.size() > std::size_t(training::FrameMeter::History) ? shown.size() - training::FrameMeter::History : 0;
+  return std::span<const Shown>(shown).subspan(from);
 }
 
 // One fighter's bar: a cell per frame, invincibility above, hit-freeze's mark between cells,
 // a tick under every fifth.
-void Bar(ImDrawList* draw, const Layout& l, ImVec2 origin, const std::vector<MeterCell>& cells, const std::vector<Shown>& shown) {
+void Bar(ImDrawList* draw, const Layout& l, ImVec2 origin, const std::vector<MeterCell>& cells, std::span<const Shown> shown) {
   const float step = l.cell + l.gap;
   for (int i = 0; i < training::FrameMeter::History; ++i) {
     const float x = origin.x + i * step;
@@ -185,6 +214,17 @@ void Bar(ImDrawList* draw, const Layout& l, ImVec2 origin, const std::vector<Met
       draw->AddLine(ImVec2(mx, origin.y + l.barHeight + 1 * l.scale), ImVec2(mx, origin.y + l.barHeight + (tenth ? 4.0f : 2.5f) * l.scale),
                     IM_COL32(240, 240, 244, tenth ? 150 : 80), 1.0f * l.scale);
     }
+  }
+}
+
+// Everything drawn since vertex `first`, the panel's cells and text with its fill, at `opacity`
+// (0 to 1) of its own alpha.
+void Fade(ImDrawList* draw, int first, float opacity) {
+  if (opacity >= 1.0f) return;
+  for (int i = first; i < draw->VtxBuffer.Size; ++i) {
+    ImU32& c = draw->VtxBuffer[i].col;
+    const ImU32 alpha = ImU32(float((c & IM_COL32_A_MASK) >> IM_COL32_A_SHIFT) * opacity + 0.5f);
+    c = (c & ~IM_COL32_A_MASK) | (alpha << IM_COL32_A_SHIFT);
   }
 }
 
@@ -225,6 +265,7 @@ void DrawMeterPanel(const MeterView& meter, const MeterSettings& s, float scale,
   const int rows = s.secondRow ? 2 : 1;
   const Layout l = Arrange(s, rows, scale);
   ImDrawList* draw = ImGui::GetBackgroundDrawList();  // under the menu
+  const int firstVertex = draw->VtxBuffer.Size;
   draw->AddRectFilled(ImVec2(l.left, l.top), ImVec2(l.left + l.width, l.top + l.height), PanelFill, 4 * l.scale);
   float y = l.top + l.pad;
   const float left = l.left + l.pad;
@@ -234,13 +275,14 @@ void DrawMeterPanel(const MeterView& meter, const MeterSettings& s, float scale,
     DrawHints(draw, ImVec2(l.left + l.width - l.pad - width, y + (l.text - size) * 0.5f), size, hints, false);
   }
   y += l.text + 8 * l.scale;
-  const std::vector<Shown>& shown = ShownFrames(meter);
+  const std::span<const Shown> shown = ShownFrames(meter);
   for (int side = 0; side < rows; ++side) {
     draw->AddText(LoadedFonts().body, l.small, ImVec2(left, y + (l.barHeight - l.small) * 0.5f), colour::Muted, side == 0 ? "P1" : "P2");
     Bar(draw, l, ImVec2(left + l.label, y), meter.cells[side], shown);
     y += l.barHeight + l.rowGap;
   }
   if (s.key) KeyLine(draw, l, ImVec2(left + l.label, y + 5 * l.scale - l.rowGap + 4 * l.scale));
+  Fade(draw, firstVertex, s.opacity / 100.0f);
 }
 
 }  // namespace fexl::ui

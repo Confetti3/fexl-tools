@@ -6,7 +6,7 @@ A frame meter and hitbox view for **FIGHTING EX LAYER**'s Training mode (Steam).
 
 ## Features
 
-- **Frame meter.** One cell per frame for both fighters: startup, active, recovery, total, and the frame advantage on hit or block. Hit-freeze is left out of the count, as frame data leaves it out, and marked with a pink line. Invincible frames are marked above the cells.
+- **Frame meter.** One cell per frame for both fighters: startup, active, recovery, total, and the frame advantage on hit or block. Hit-freeze is left out of the count, as frame data leaves it out, and marked with a pink line. Invincible frames are marked above the cells. Throws show their startup and active frame, then the throw itself and the advantage once the opponent gets up. Jumps show their take-off, air and landing frames; a jump-in reads its attack and the advantage after landing. Size and opacity can be set in the menu.
 - **Hitbox view.** The game's own hit spheres, drawn in the 3D scene: hurtboxes, active hitboxes, hitboxes about to come out, throw hurtboxes and projectiles. Hurtboxes that cannot be hit right now turn grey. Filled, outline or wireframe, in three palettes (one colour-blind safe).
 - **Pause, frame step and slow motion** (half and quarter speed) for the fight, while the camera and menus keep running.
 - **A menu in the game's own style** (F1), driven by pad, keyboard or mouse, with a colour key that explains everything on screen.
@@ -43,7 +43,7 @@ In the menu: **LB / RB** (or Q / E) change tab, the **d-pad** (or arrow keys) mo
 
 ## Reading the meter
 
-Each cell is one frame (1/60 s). A bar starts when either fighter commits and ends when both are free again. The line above the bars reads out the move: `Startup 9  Active 6  Recovery 19  Total 33  On hit +0`. The advantage is the attacker's: **+** means the attacker acts first, **−** the defender. The Colour key tab in the menu explains every colour.
+Each cell is one frame (1/60 s). A bar starts when either fighter commits and ends when both are free again. The line above the bars reads out the move: `Startup 9  Active 6  Recovery 19  Total 33  On hit +0`. The advantage is the attacker's: **+** means the attacker acts first, **−** the defender. A chain, a cancel or a special's follow-up stage counts as one move, so the advantage is read from the end of the whole string. The Colour key tab in the menu explains every colour.
 
 ## Compatibility and safety
 

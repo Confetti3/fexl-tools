@@ -9,7 +9,8 @@ namespace {
 bool Struck(MeterKind kind) { return kind == MeterKind::Hit || kind == MeterKind::Guard; }
 
 // The first move in a row of cells: startup up to its first active frame, its active windows,
-// and recovery after the last of them. Hit-freeze is not a frame of the move.
+// and recovery after the last of them. Hit-freeze is not a frame of the move. A throw that
+// catches ends there: what follows is the throw, not recovery.
 MoveReading ReadMove(const std::vector<MeterCell>& cells) {
   MoveReading move;
   std::size_t i = 0;
@@ -31,6 +32,7 @@ MoveReading ReadMove(const std::vector<MeterCell>& cells) {
       inWindow = false;
     } else {
       move.ended = true;
+      move.caught = kind == MeterKind::Throw;
       break;
     }
     ++frames;
@@ -41,10 +43,32 @@ MoveReading ReadMove(const std::vector<MeterCell>& cells) {
   return move;
 }
 
+// The exchange's first jump, if it stays a jump: its frames on the ground before take-off, in the
+// air, and its landing frame. A jump that attacks is read as its attack (ReadMove), and then no
+// later jump in the exchange is read. A jump cut short (hit out of the air) has no landing.
+JumpReading ReadJump(const std::vector<MeterCell>& cells) {
+  JumpReading jump;
+  std::size_t i = 0;
+  while (i < cells.size() && cells[i].kind != MeterKind::Jump) ++i;
+  for (; i < cells.size() && cells[i].kind == MeterKind::Jump; ++i) {
+    if (cells[i].airborne) ++jump.air;
+    else if (jump.air == 0) ++jump.takeOff;
+    else ++jump.landing;
+  }
+  if (i < cells.size()) {
+    const MeterKind next = cells[i].kind;
+    if (cells[i].airborne || next == MeterKind::Startup || next == MeterKind::Active || next == MeterKind::Stop)
+      return JumpReading{};  // an attack in the air
+    jump.ended = jump.landing > 0;
+  }
+  jump.seen = jump.takeOff + jump.air > 0;
+  return jump;
+}
+
 }  // namespace
 
 std::string Describe(const MeterView& view) {
-  static constexpr char Letters[] = ".msArxpGHD?";
+  static constexpr char Letters[] = ".mJsArxpGHDT?";
   static_assert(sizeof(Letters) - 1 == std::size_t(MeterKind::Unknown) + 1, "one letter per MeterKind, in order");
   std::string line;
   for (int side = 0; side < 2; ++side) {
@@ -54,8 +78,13 @@ std::string Describe(const MeterView& view) {
   char text[96];
   if (view.readingSide >= 0) {
     const MoveReading& m = view.moves[view.readingSide];
-    snprintf(text, sizeof(text), " || P%d startup %d active %d hits %d recovery %d total %d", view.readingSide + 1, m.startup,
-             m.active, m.hits, m.ended ? m.recovery : -1, m.ended ? m.Total() : -1);
+    snprintf(text, sizeof(text), " || P%d startup %d active %d hits %d recovery %d total %d%s", view.readingSide + 1, m.startup,
+             m.active, m.hits, m.ended ? m.recovery : -1, m.ended ? m.Total() : -1, m.caught ? " caught" : "");
+    line += text;
+  } else if (const int side = view.jumps[0].seen ? 0 : view.jumps[1].seen ? 1 : -1; side >= 0) {
+    const JumpReading& j = view.jumps[side];
+    snprintf(text, sizeof(text), " || P%d jump take-off %d air %d landing %d total %d", side + 1, j.takeOff, j.air, j.landing,
+             j.ended ? j.Total() : -1);
     line += text;
   }
   if (view.advantage.valid) {
@@ -91,22 +120,25 @@ bool FrameMeter::Push(const std::array<MeterCell, 2>& frame) {
   }
   for (int side = 0; side < 2; ++side) {
     auto& row = view_.cells[side];
-    if (row.size() == History) {
+    if (row.size() == Kept) {
       row.erase(row.begin());
       view_.scrolled = true;
     }
     row.push_back(frame[side]);
   }
   Measure(frame);
-  for (int side = 0; side < 2; ++side) view_.moves[side] = view_.scrolled ? MoveReading{} : ReadMove(view_.cells[side]);
+  for (int side = 0; side < 2; ++side) {
+    view_.moves[side] = view_.scrolled ? MoveReading{} : ReadMove(view_.cells[side]);
+    view_.jumps[side] = view_.scrolled ? JumpReading{} : ReadJump(view_.cells[side]);
+  }
   view_.readingSide = view_.advantage.valid ? view_.advantage.attacker : view_.moves[0].seen ? 0 : view_.moves[1].seen ? 1 : -1;
   ++tick_;
   return true;
 }
 
 // A fighter is released, free to act again, on the first frame after its commitment that is
-// either free or the start of a new attack (a reversal out of stun, a move buffered after
-// recovery). Advantage is the difference between the two fighters' release frames.
+// either free or the start of a new attack or jump (a reversal out of stun, a move buffered
+// after recovery). Advantage is the difference between the two fighters' release frames.
 void FrameMeter::Measure(const std::array<MeterCell, 2>& frame) {
   for (int side = 0; side < 2; ++side) {
     const MeterCell& cell = frame[side];

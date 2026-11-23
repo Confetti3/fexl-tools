@@ -3,6 +3,7 @@
 #include "game/Build.hxx"
 #include "game/Memory.hxx"
 
+#include <atomic>
 #include <cmath>
 
 namespace fexl::game {
@@ -11,7 +12,9 @@ namespace {
 
 // Offsets in a player (CPlayerBase).
 namespace player {
+constexpr uintptr_t Flags = 0x278;      // uint64
 constexpr uintptr_t Act = 0x2A8;
+constexpr uintptr_t Pose = 0x2B0;       // int: 3 in the air
 constexpr uintptr_t Model = 0x308;      // -> +0x18 skeleton -> +0x68 bone matrices (3x4 floats each)
 constexpr uintptr_t Motion = 0x310;     // -> +0xB0 motion frame
 constexpr uintptr_t HitIndex = 0x828;   // the attack's current hit entry (< 16)
@@ -27,6 +30,20 @@ constexpr uintptr_t HitTimers = 0x868;  // -> +0x10 strike-proof, +0x20 throw-pr
 // in the attack's exclusion mask: strikes exclude layers 2 and 4, throw-type attacks 1 and 4.
 // So layer 1 is the strike hurtbox and layer 2 the throw hurtbox.
 constexpr uint32_t StrikeLayer = 1, ThrowLayer = 2;
+
+// A player's flag while contact holds it in hit-freeze (measured: set from the frame after
+// contact until the freeze ends, on hit and on block).
+constexpr uint64_t HitFreezeFlag = 0x100;
+constexpr int32_t AirPose = 3;
+
+// The battle frame (count + 1) on which each side's throw was last tested; 0 for none.
+std::atomic<uint64_t> s_catchTested[2];
+
+uint64_t BattleFrames() {
+  uint64_t frames = 0;
+  Read(Exe() + rva::BattleFrameCount, frames);
+  return frames;
+}
 
 Vec3 Transform(const float* m, const float* local) {
   return Vec3{local[0] * m[0] + local[1] * m[1] + local[2] * m[2] + m[3],
@@ -46,8 +63,13 @@ bool ReadSphereRecord(uintptr_t record, float* local, float& radius) {
 
 bool ReadFighter(uintptr_t p, Fighter& f, uintptr_t& hit) {
   uintptr_t motion = 0, timers = 0, hitSet = 0;
-  if (!Read(p + player::Act, f.act) || !Pointer(p + player::Motion, motion) || !Read(motion + 0xB0, f.motionFrame))
+  uint64_t flags = 0;
+  if (!Read(p + player::Act, f.act) || !Pointer(p + player::Motion, motion) || !Read(motion + 0xB0, f.motionFrame) ||
+      !Read(p + player::Flags, flags))
     return false;
+  f.hitFreeze = (flags & HitFreezeFlag) != 0;
+  int32_t pose = 0;
+  f.airborne = Read(p + player::Pose, pose) && pose == AirPose;
   int16_t attackOff = 0;
   if (Pointer(p + player::HitTimers, timers)) {
     Read(timers + 0x10, f.strikeProof);
@@ -125,6 +147,7 @@ bool InTraining() {
 bool ReadBattleFrame(BattleFrame& frame) {
   frame = BattleFrame{};
   uintptr_t players[2] = {}, hits[2] = {};
+  frame.number = BattleFrames();
   for (int side = 0; side < 2; ++side) {
     if (!Pointer(Exe() + rva::PlayerTable + 8 * uintptr_t(side), players[side]) ||
         !ReadFighter(players[side], frame.fighters[side], hits[side]))
@@ -143,11 +166,26 @@ bool ReadBattleFrame(BattleFrame& frame) {
   return true;
 }
 
+void NoteCatchTest(const void* player) {
+  uintptr_t players[2] = {};
+  if (!Read(Exe() + rva::PlayerTable, players)) return;
+  for (int side = 0; side < 2; ++side)
+    if (players[side] == reinterpret_cast<uintptr_t>(player)) s_catchTested[side].store(BattleFrames() + 1);
+}
+
+void ReadThrowTests(BattleFrame& frame) {
+  for (int side = 0; side < 2; ++side) frame.fighters[side].catchTested = s_catchTested[side].load() == frame.number + 1;
+}
+
+void ForgetThrowTests() {
+  for (auto& tested : s_catchTested) tested.store(0);
+}
+
 BattleIdentity ReadBattleIdentity(const void* battle) {
   BattleIdentity id;
   id.battle = battle;
   Read(Exe() + rva::PlayerTable, id.players);
-  Read(Exe() + rva::BattleFrameCount, id.frames);
+  id.frames = BattleFrames();
   return id;
 }
 

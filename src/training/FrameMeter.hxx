@@ -18,15 +18,17 @@ namespace fexl::training {
 enum class MeterKind : uint8_t {
   Neutral,    // free to act
   Movement,   // walking or dashing
+  Jump,       // a jump with no attack: take-off, the air and the landing frame
   Startup,    // an attack before it can hit
   Active,     // an attack that can hit on this frame
   Recovery,   // after the hit window, before the fighter is free
   Stop,       // hit-freeze: the attacker held still on contact
   Proximity,  // the guard pose a defender takes while an attack comes; no commitment
   Guard,      // blockstun
-  Hit,        // hitstun
+  Hit,        // hitstun, or being thrown
   Down,       // knocked down or getting up
-  Unknown,    // a state not identified yet (throws among them)
+  Throw,      // holding or throwing the opponent once a throw has caught
+  Unknown,    // a state not identified yet
 };
 
 // What cannot touch the fighter on this frame.
@@ -35,7 +37,11 @@ enum class Invincibility : uint8_t { None, Throw, Strike, Full };
 struct MeterCell {
   MeterKind kind = MeterKind::Neutral;
   Invincibility invincibility = Invincibility::None;
-  bool moveStart = false;  // the first frame of a new attack
+  bool airborne = false;  // off the ground
+  // The first frame of an attack or jump begun from outside one: from neutral, after a move's
+  // end, or out of stun. A chain, a cancel, a move's next stage or an attack in the air
+  // continues the same commitment.
+  bool moveStart = false;
 };
 
 // A fighter's commitment: the frames a meter exchange is made of.
@@ -47,12 +53,24 @@ bool Committed(MeterKind kind);
 struct MoveReading {
   bool seen = false;    // the move reached an active frame
   bool ended = false;   // and is over, so recovery and total are known
+  bool caught = false;  // it ended in a throw that caught: no recovery or total to read
   int startup = 0;
   int active = 0;
   int hits = 0;         // active windows
   int span = 0;
   int recovery = 0;
   int Total() const { return startup - 1 + span + recovery; }
+};
+
+// The first jump a fighter made in the exchange, if it attacked in none: the frames before it
+// leaves the ground, in the air, and its landing frame.
+struct JumpReading {
+  bool seen = false;
+  bool ended = false;  // landed, so the landing and total are known
+  int takeOff = 0;
+  int air = 0;
+  int landing = 0;
+  int Total() const { return takeOff + air + landing; }
 };
 
 // Frame advantage after contact: how many frames sooner each fighter could act than the other.
@@ -66,8 +84,9 @@ struct Advantage {
 
 struct MeterView {
   std::array<std::vector<MeterCell>, 2> cells;  // the exchange, oldest first
-  bool scrolled = false;                        // its start has scrolled off the left
+  bool scrolled = false;                        // its start is no longer kept (FrameMeter::Kept)
   std::array<MoveReading, 2> moves;
+  std::array<JumpReading, 2> jumps;
   Advantage advantage;      // this exchange's, once both fighters are free
   Advantage lastAdvantage;  // the last measured, kept after the exchange
   // The move to read out: the attacker's once there was contact, else the first mover's;
@@ -76,13 +95,16 @@ struct MeterView {
 };
 
 // The view as one line of text, for the log: each fighter's cells as letters (. free, m moving,
-// s startup, A active, r recovery, x hit-freeze, p guard pose, G blockstun, H hitstun, D down,
-// ? other), the move read out and the result.
+// J jump, s startup, A active, r recovery, x hit-freeze, p guard pose, G blockstun, H hitstun,
+// D down, T throw, ? other), the move read out and the result.
 std::string Describe(const MeterView& view);
 
 class FrameMeter {
  public:
-  static constexpr int History = 90;          // cells shown
+  static constexpr int History = 90;  // cells shown: the exchange's latest frames, hit-freeze left out
+  // Frames kept per exchange, hit-freeze and the idle wait before it closes included, so a long
+  // move keeps its reading; an exchange longer than this loses its start.
+  static constexpr int Kept = 600;
   static constexpr int IdleFramesToClose = 24;  // both free this long ends an exchange
 
   // A frame of both fighters; true when the view changed. A new battle gets a new FrameMeter.
