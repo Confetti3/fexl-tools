@@ -125,6 +125,8 @@ constexpr Translation Japanese[] = {
     {"Take-off", "踏み切り"},
     {"Airborne", "空中"},
     {"Landing", "着地"},
+    {"Teleport", "テレポート"},
+    {"Warping to another place; cannot act.", "別の場所へ瞬間移動中。行動できません。"},
     {"Knockdown", "ダウン"},
     {"Knocked down or getting up.", "ダウン中・起き上がり中。"},
     {"Throw", "投げ"},
@@ -163,10 +165,10 @@ constexpr Translation Japanese[] = {
     {"MARKS ABOVE A CELL", "マスの上の印"},
     {"An attack hits when its hitbox touches the other fighter's hurtbox.", "攻撃判定が相手の喰らい判定に触れると、攻撃がヒットします。"},
     {"The trainer's controls. Up and down scroll the page.", "ツールの操作方法。上下でスクロールします。"},
-    {"FEXL TRAINING TOOLS 0.7", "FEXL トレーニングツール 0.7"},
-    {"For FIGHTING EX LAYER on Steam, version 1.5.7. Works in Training mode only: nothing shows, and nothing changes, in "
+    {"FEXL TRAINING TOOLS 0.8", "FEXL トレーニングツール 0.8"},
+    {"For FIGHTING EX LAYER on Steam, version 1.6.0. Works in Training mode only: nothing shows, and nothing changes, in "
      "online or other matches. In Training it draws over the fight, and holds or slows it only when you ask.",
-     "Steam版 FIGHTING EX LAYER（バージョン1.5.7）用。トレーニングモード専用です。\n"
+     "Steam版 FIGHTING EX LAYER（バージョン1.6.0）用。トレーニングモード専用です。\n"
      "オンラインや他のモードでは何も表示せず、何も変更しません。\n"
      "トレーニングでは試合の上に表示し、指示したときだけ試合を止めたり遅くしたりします。"},
     {"PAD, WHILE THIS MENU IS OPEN", "パッド（メニュー表示中）"},

@@ -11,8 +11,10 @@ using training::MeterKind;
 // The actions of an attack (a throw attempt among them) before it ends or catches.
 bool Attacking(int act) { return act == ActNormal || act == ActSpecial || act == ActThrow; }
 bool TakeOff(int act) { return act == ActTakeOff || act == ActTakeOffForward || act == ActTakeOffBack; }
-// A jump before it lands: its take-off and its time in the air.
-bool Jumping(int act) { return TakeOff(act) || act == ActAir || act == ActAirForward || act == ActAirBack; }
+// A jump before it lands: its take-off and its time in the air, EX Arrow's among them.
+bool Jumping(int act) { return TakeOff(act) || act == ActAir || act == ActAirForward || act == ActAirBack || act == ActExArrow; }
+// The first action of a commitment taken from neutral: an attack, a jump, Hunting Dash or Teleport.
+bool Begins(int act) { return Attacking(act) || TakeOff(act) || act == ActHuntingDash || act == ActTeleport; }
 
 MeterKind Kind(const Fighter& now, const Fighter& previous, const MeterCell& previousCell) {
   switch (now.act) {
@@ -25,7 +27,10 @@ MeterKind Kind(const Fighter& now, const Fighter& previous, const MeterCell& pre
     case ActWalkForward: case ActWalkBack:
       return MeterKind::Movement;
     case ActTakeOff: case ActTakeOffForward: case ActTakeOffBack: case ActAir: case ActAirForward: case ActAirBack:
+    case ActExArrow: case ActHuntingDash:
       return MeterKind::Jump;
+    case ActTeleport:
+      return MeterKind::Teleport;
     case ActLand: case ActLandForward: case ActLandBack:
       // After an air attack the landing holds the fighter until its motion settles (ActRecovery).
       // An empty jump's landing frame is the jump's last; from the next the fighter can act
@@ -53,10 +58,11 @@ MeterKind Kind(const Fighter& now, const Fighter& previous, const MeterCell& pre
     case ActThrowHold: case ActThrowing:
       return MeterKind::Throw;
     case ActRecovery:
-      // The settling tail after a move or after stun. After a move its first frame is still the
-      // move's last; from then on the fighter can act, as after stun at once. Measured against
-      // the community frame data: Kairi's standing LP, MP, HP, LK and MK all total and advantage
-      // as it lists them (LK totals 17, not 31; HP is 0 on hit, not +8).
+      // The settling tail after a move, after stun or after a teleport. After a move its first
+      // frame is still the move's last; from then on the fighter can act, as after stun or a
+      // teleport at once. Measured against the community frame data: Kairi's standing LP, MP, HP,
+      // LK and MK all total and advantage as it lists them (LK totals 17, not 31; HP is 0 on hit,
+      // not +8). After Teleport, a normal pressed on this action's first frame comes out on the next.
       return Attacking(previous.act) ? MeterKind::Recovery : MeterKind::Neutral;
     case ActGuardPose:
       return MeterKind::Proximity;
@@ -85,11 +91,10 @@ MeterCell MeterSample(const Fighter& now, const Fighter& previous, const MeterCe
   cell.kind = Kind(now, previous, previousCell);
   cell.invincibility = InvincibilityOf(now);
   cell.airborne = now.airborne;
-  // A new attack or jump only from outside one: an attack that follows another (a chain, a
-  // cancel, a special's next stage, which starts its motion again) is the same commitment, and
-  // so is an attack in the air: the fighter is not free until it lands.
-  cell.moveStart = (Attacking(now.act) || TakeOff(now.act)) && !Attacking(previous.act) && !Jumping(previous.act) &&
-                   !previous.airborne;
+  // A new commitment only from outside one: an attack that follows another (a chain, a cancel,
+  // a special's next stage, which starts its motion again) is the same commitment, and so is an
+  // attack in the air: the fighter is not free until it lands.
+  cell.moveStart = Begins(now.act) && !Begins(previous.act) && !Jumping(previous.act) && !previous.airborne;
   return cell;
 }
 

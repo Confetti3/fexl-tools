@@ -37,12 +37,15 @@ struct SphereList {
 // motion goes on in ActRecovery.
 // A throw: 23 the attempt (its active frames are the catch tests), on a catch 24 the hold (the
 // window to break it) and 25 the throw itself, while the one caught is in 26.
+// Gougi abilities: EX Arrow (39) is the air of its jump, after an ordinary take-off and before
+// ActLand; Hunting Dash (42) is a whole low jump in one act, its take-off, air and landing told
+// apart by the pose; Teleport (43) is all of the warp, followed by ActRecovery.
 enum Act : int {
   ActStand = 0, ActCrouch = 1, ActCrouching = 2, ActRising = 3, ActWalkForward = 4, ActWalkBack = 5,
   ActTakeOffForward = 6, ActAirForward = 7, ActLandForward = 8, ActTakeOffBack = 9, ActAirBack = 10, ActLandBack = 11,
   ActTakeOff = 12, ActAir = 13, ActLand = 14, ActTurn = 16, ActRecovery = 17, ActNormal = 18, ActSpecial = 19,
   ActGuardPose = 20, ActBlockStun = 21, ActThrow = 23, ActThrowHold = 24, ActThrowing = 25, ActThrown = 26,
-  ActKnockedDown = 27, ActDown = 28, ActHitStun = 29,
+  ActKnockedDown = 27, ActDown = 28, ActHitStun = 29, ActExArrow = 39, ActHuntingDash = 42, ActTeleport = 43,
 };
 
 // The hit an action is playing: its window in motion frames, whether the game tests it on this

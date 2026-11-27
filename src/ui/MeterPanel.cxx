@@ -31,6 +31,7 @@ const MeterKeyEntry kKey[] = {
     {MeterKind::Proximity, "Guard pose", "Ready to block as an attack comes; free to act."},
     {MeterKind::Movement, "Movement", "Walking or dashing."},
     {MeterKind::Jump, "Jump", "A jump with no attack: take-off, the air and the landing frame."},
+    {MeterKind::Teleport, "Teleport", "Warping to another place; cannot act."},
     {MeterKind::Down, "Knockdown", "Knocked down or getting up."},
     {MeterKind::Throw, "Throw", "A throw that caught: holding and throwing the opponent."},
     {MeterKind::Unknown, "Other", "States not identified yet."},
@@ -48,6 +49,7 @@ ImU32 KindColour(MeterKind kind) {
     case MeterKind::Neutral: return IM_COL32(120, 126, 134, 150);
     case MeterKind::Movement: return IM_COL32(86, 196, 226, 235);
     case MeterKind::Jump: return IM_COL32(168, 226, 246, 235);
+    case MeterKind::Teleport: return IM_COL32(196, 166, 250, 235);
     case MeterKind::Startup: return IM_COL32(52, 200, 96, 245);
     case MeterKind::Active: return IM_COL32(230, 52, 74, 245);
     case MeterKind::Recovery: return IM_COL32(52, 112, 230, 245);
@@ -118,24 +120,30 @@ void Readings(ImDrawList* draw, const Layout& l, ImVec2 at, const MeterView& met
   const float space = 6 * l.scale, apart = 16 * l.scale;
   const int side = meter.readingSide;
   if (side < 0) {
-    // No move yet: a jump's frames, else how to get a reading.
-    const int jumper = meter.jumps[0].seen ? 0 : meter.jumps[1].seen ? 1 : -1;
-    if (jumper < 0) {
-      put(T("Frame data shows once a move is active"), colour::Muted, 0);
-      return;
-    }
-    const training::JumpReading& jump = meter.jumps[jumper];
-    if (jumper == 1) put(T("P2"), colour::Gold, apart);
-    put(T("Jump"), colour::Text, apart);
-    put(T("Take-off"), colour::Muted, space);
-    put(std::to_string(jump.takeOff), colour::Text, apart);
-    put(T("Airborne"), colour::Muted, space);
-    put(std::to_string(jump.air), colour::Text, apart);
-    put(T("Landing"), colour::Muted, space);
-    put(jump.ended ? std::to_string(jump.landing) : "--", colour::Text, apart);
-    if (jump.ended) {
+    // No move yet: a jump's frames, else a teleport's, else how to get a reading.
+    const int jumper = training::SeenSide(meter.jumps), teleporter = training::SeenSide(meter.teleports);
+    if (jumper >= 0) {
+      const training::JumpReading& jump = meter.jumps[jumper];
+      if (jumper == 1) put(T("P2"), colour::Gold, apart);
+      put(T("Jump"), colour::Text, apart);
+      put(T("Take-off"), colour::Muted, space);
+      put(std::to_string(jump.takeOff), colour::Text, apart);
+      put(T("Airborne"), colour::Muted, space);
+      put(std::to_string(jump.air), colour::Text, apart);
+      put(T("Landing"), colour::Muted, space);
+      put(jump.ended ? std::to_string(jump.landing) : "--", colour::Text, apart);
+      if (jump.ended) {
+        put(T("Total"), colour::Muted, space);
+        put(std::to_string(jump.Total()), colour::Text, 0);
+      }
+    } else if (teleporter >= 0) {
+      const training::TeleportReading& teleport = meter.teleports[teleporter];
+      if (teleporter == 1) put(T("P2"), colour::Gold, apart);
+      put(T("Teleport"), colour::Text, apart);
       put(T("Total"), colour::Muted, space);
-      put(std::to_string(jump.Total()), colour::Text, 0);
+      put(teleport.ended ? std::to_string(teleport.total) : "--", colour::Text, 0);
+    } else {
+      put(T("Frame data shows once a move is active"), colour::Muted, 0);
     }
     return;
   }

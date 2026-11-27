@@ -19,6 +19,7 @@ enum class MeterKind : uint8_t {
   Neutral,    // free to act
   Movement,   // walking or dashing
   Jump,       // a jump with no attack: take-off, the air and the landing frame
+  Teleport,   // a teleport: gone from one place to another, unable to act
   Startup,    // an attack before it can hit
   Active,     // an attack that can hit on this frame
   Recovery,   // after the hit window, before the fighter is free
@@ -73,6 +74,20 @@ struct JumpReading {
   int Total() const { return takeOff + air + landing; }
 };
 
+// The first teleport a fighter made in the exchange: its frames up to the first on which the
+// fighter can act again.
+struct TeleportReading {
+  bool seen = false;
+  bool ended = false;  // the fighter can act again, so the total is known
+  int total = 0;
+};
+
+// The side whose reading was seen, P1's first; -1 for neither.
+template <class Reading>
+int SeenSide(const std::array<Reading, 2>& readings) {
+  return readings[0].seen ? 0 : readings[1].seen ? 1 : -1;
+}
+
 // Frame advantage after contact: how many frames sooner each fighter could act than the other.
 struct Advantage {
   bool valid = false;
@@ -87,6 +102,7 @@ struct MeterView {
   bool scrolled = false;                        // its start is no longer kept (FrameMeter::Kept)
   std::array<MoveReading, 2> moves;
   std::array<JumpReading, 2> jumps;
+  std::array<TeleportReading, 2> teleports;
   Advantage advantage;      // this exchange's, once both fighters are free
   Advantage lastAdvantage;  // the last measured, kept after the exchange
   // The move to read out: the attacker's once there was contact, else the first mover's;
@@ -95,8 +111,8 @@ struct MeterView {
 };
 
 // The view as one line of text, for the log: each fighter's cells as letters (. free, m moving,
-// J jump, s startup, A active, r recovery, x hit-freeze, p guard pose, G blockstun, H hitstun,
-// D down, T throw, ? other), the move read out and the result.
+// J jump, W teleport, s startup, A active, r recovery, x hit-freeze, p guard pose, G blockstun,
+// H hitstun, D down, T throw, ? other), the move read out and the result.
 std::string Describe(const MeterView& view);
 
 class FrameMeter {

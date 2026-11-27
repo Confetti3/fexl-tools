@@ -6,7 +6,7 @@ A frame meter and hitbox view for **FIGHTING EX LAYER**'s Training mode (Steam).
 
 ## Features
 
-- **Frame meter.** One cell per frame for both fighters: startup, active, recovery, total, and the frame advantage on hit or block. Hit-freeze is left out of the count, as frame data leaves it out, and marked with a pink line. Invincible frames are marked above the cells. Throws show their startup and active frame, then the throw itself and the advantage once the opponent gets up. Jumps show their take-off, air and landing frames; a jump-in reads its attack and the advantage after landing. Size and opacity can be set in the menu.
+- **Frame meter.** One cell per frame for both fighters: startup, active, recovery, total, and the frame advantage on hit or block. Hit-freeze is left out of the count, as frame data leaves it out, and marked with a pink line. Invincible frames are marked above the cells. Throws show their startup and active frame, then the throw itself and the advantage once the opponent gets up. Jumps show their take-off, air and landing frames; a jump-in reads its attack and the advantage after landing. The Gougi Hunting Dash and EX Arrow read as jumps, and Teleport shows its total. Size and opacity can be set in the menu.
 - **Hitbox view.** The game's own hit spheres, drawn in the 3D scene: hurtboxes, active hitboxes, hitboxes about to come out, throw hurtboxes and projectiles. Hurtboxes that cannot be hit right now turn grey. Filled, outline or wireframe, in three palettes (one colour-blind safe).
 - **Pause, frame step and slow motion** (half and quarter speed) for the fight, while the camera and menus keep running.
 - **A menu in the game's own style** (F1), driven by pad, keyboard or mouse, with a colour key that explains everything on screen.
@@ -47,7 +47,7 @@ Each cell is one frame (1/60 s). A bar starts when either fighter commits and en
 
 ## Compatibility and safety
 
-- Made for the Steam version **1.5.7** (build 21126030). On any other version the mod stays off and says so in its log.
+- Made for the Steam version **1.6.0** (build 26967029). On any other version the mod stays off and says so in its log.
 - The game ships no anti-cheat. Even so, the mod checks the game's own mode on every frame and does nothing outside Training.
 - It never changes the fight itself. In Training it draws over it, and holds or slows it only when you ask.
 - On a scaled display (for example 150 %), the game is shown at the screen's real resolution, so its resolution list is no longer capped.

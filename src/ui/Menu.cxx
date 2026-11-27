@@ -107,8 +107,8 @@ void AboutTab(ListMenu& m, Language& language) {
   m.Choice("Language", JapaneseFontLoaded() ? "The trainer's language. Auto follows Windows' display language."
                                             : "Japanese needs a Japanese font (Yu Gothic, Meiryo or MS Gothic), which was not found.",
            language);
-  m.Section("FEXL TRAINING TOOLS 0.7");
-  m.Text("For FIGHTING EX LAYER on Steam, version 1.5.7. Works in Training mode only: nothing shows, and nothing changes, "
+  m.Section("FEXL TRAINING TOOLS 0.8");
+  m.Text("For FIGHTING EX LAYER on Steam, version 1.6.0. Works in Training mode only: nothing shows, and nothing changes, "
          "in online or other matches. In Training it draws over the fight, and holds or slows it only when you ask.");
   m.Section("PAD, WHILE THIS MENU IS OPEN");
   m.HintLine({{Glyph::LB, Glyph::RB}, nullptr, "Change tab"}, true);

@@ -7,7 +7,7 @@
 namespace fexl::game {
 
 namespace {
-constexpr uint32_t SupportedTimeDateStamp = 0x6939020E;
+constexpr uint32_t SupportedTimeDateStamp = 0x6B092CCB;
 }
 
 uintptr_t Exe() {

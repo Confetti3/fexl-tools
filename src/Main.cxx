@@ -32,7 +32,7 @@ std::wstring BesideDll(const wchar_t* name) {
 DWORD WINAPI Start(void*) {
   using namespace fexl;
   OpenLog(BesideDll(L"fexl_trainer.log").c_str());
-  Log("FEXL Training Tools 0.7");
+  Log("FEXL Training Tools 0.8");
   Log("display: %s", IsProcessDPIAware() ? "DPI-aware, real pixels" : "scaled by Windows");
   if (!game::IsSupportedBuild()) {
     Log("this game build is not the supported one; the trainer stays off");

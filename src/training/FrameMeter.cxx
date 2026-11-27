@@ -65,10 +65,20 @@ JumpReading ReadJump(const std::vector<MeterCell>& cells) {
   return jump;
 }
 
+TeleportReading ReadTeleport(const std::vector<MeterCell>& cells) {
+  TeleportReading teleport;
+  std::size_t i = 0;
+  while (i < cells.size() && cells[i].kind != MeterKind::Teleport) ++i;
+  for (; i < cells.size() && cells[i].kind == MeterKind::Teleport; ++i) ++teleport.total;
+  teleport.seen = teleport.total > 0;
+  teleport.ended = teleport.seen && i < cells.size();
+  return teleport;
+}
+
 }  // namespace
 
 std::string Describe(const MeterView& view) {
-  static constexpr char Letters[] = ".mJsArxpGHDT?";
+  static constexpr char Letters[] = ".mJWsArxpGHDT?";
   static_assert(sizeof(Letters) - 1 == std::size_t(MeterKind::Unknown) + 1, "one letter per MeterKind, in order");
   std::string line;
   for (int side = 0; side < 2; ++side) {
@@ -81,10 +91,14 @@ std::string Describe(const MeterView& view) {
     snprintf(text, sizeof(text), " || P%d startup %d active %d hits %d recovery %d total %d%s", view.readingSide + 1, m.startup,
              m.active, m.hits, m.ended ? m.recovery : -1, m.ended ? m.Total() : -1, m.caught ? " caught" : "");
     line += text;
-  } else if (const int side = view.jumps[0].seen ? 0 : view.jumps[1].seen ? 1 : -1; side >= 0) {
+  } else if (const int side = SeenSide(view.jumps); side >= 0) {
     const JumpReading& j = view.jumps[side];
     snprintf(text, sizeof(text), " || P%d jump take-off %d air %d landing %d total %d", side + 1, j.takeOff, j.air, j.landing,
              j.ended ? j.Total() : -1);
+    line += text;
+  } else if (const int side = SeenSide(view.teleports); side >= 0) {
+    const TeleportReading& t = view.teleports[side];
+    snprintf(text, sizeof(text), " || P%d teleport total %d", side + 1, t.ended ? t.total : -1);
     line += text;
   }
   if (view.advantage.valid) {
@@ -130,8 +144,9 @@ bool FrameMeter::Push(const std::array<MeterCell, 2>& frame) {
   for (int side = 0; side < 2; ++side) {
     view_.moves[side] = view_.scrolled ? MoveReading{} : ReadMove(view_.cells[side]);
     view_.jumps[side] = view_.scrolled ? JumpReading{} : ReadJump(view_.cells[side]);
+    view_.teleports[side] = view_.scrolled ? TeleportReading{} : ReadTeleport(view_.cells[side]);
   }
-  view_.readingSide = view_.advantage.valid ? view_.advantage.attacker : view_.moves[0].seen ? 0 : view_.moves[1].seen ? 1 : -1;
+  view_.readingSide = view_.advantage.valid ? view_.advantage.attacker : SeenSide(view_.moves);
   ++tick_;
   return true;
 }
